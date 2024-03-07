@@ -83,4 +83,64 @@ class PhiModel(nn.Module):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, embed_size)
         self.pos_embedding = PhiRotaryEmbedding(embed_size)
-        self.layers = nn.ModuleList([PhiDecoderLayer(embed_size, ffn_hidden, num_heads
+        self.layers = nn.ModuleList([PhiDecoderLayer(embed_size, ffn_hidden, num_heads) for _ in range(num_layers)])
+        self.norm = nn.LayerNorm(embed_size)
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, x, mask=None):
+        N, seq_length = x.shape
+        positions = self.pos_embedding(torch.arange(seq_length, device=x.device)).unsqueeze(0).repeat(N, 1, 1)
+        x = self.dropout(self.token_embedding(x) + positions)
+
+        for layer in self.layers:
+            x = layer(x)
+
+        return self.norm(x)
+
+class PhiForCausalLM(nn.Module):
+    def __init__(self, vocab_size, embed_size, num_layers, ffn_hidden, num_heads):
+        super(PhiForCausalLM, self).__init__()
+        self.phi_model = PhiModel(vocab_size, embed_size, num_layers, ffn_hidden, num_heads)
+        self.lm_head = nn.Linear(embed_size, vocab_size)
+
+    def forward(self, x, labels=None):
+        x = self.phi_model(x)
+        logits = self.lm_head(x)
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+        
+        return logits, loss
+
+def generate_synthetic_data(num_samples=10000, sequence_length=50, vocab_size=51200):
+    input_ids = torch.randint(0, vocab_size, (num_samples, sequence_length))
+    labels = input_ids.clone()
+    return input_ids, labels
+
+# Main execution
+vocab_size = 51200
+embed_size = 2560
+num_layers = 32
+ffn_hidden = 10240
+num_heads = 8
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = PhiForCausalLM(vocab_size, embed_size, num_layers, ffn_hidden, num_heads).to(device)
+
+optimizer = AdamW(model.parameters(), lr=5e-5)
+input_ids, labels = generate_synthetic_data()
+input_ids, labels = input_ids.to(device), labels.to(device)  # Move data to the same device as model
+dataset = TensorDataset(input_ids, labels)
+loader = DataLoader(dataset, batch_size=16, shuffle=True)
+
+model.train()
+for epoch in range(1):  # Placeholder loop for demonstration
+    for batch in loader:
+        inputs, labels = batch
+        optimizer.zero_grad()
+        _, loss = model(inputs, labels=labels)
+        loss.backward()
+        optimizer.step()
+        print(f"Epoch {epoch}, Loss: {loss.item()}")
