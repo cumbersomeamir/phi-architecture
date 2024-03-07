@@ -9,15 +9,13 @@ class PhiRotaryEmbedding(nn.Module):
         super().__init__()
         self.dim = dim
         self.max_seq_len = max_seq_len
-        self.inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
+        self.inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim)).to("cuda" if torch.cuda.is_available() else "cpu")
     
     def forward(self, x):
-        # x is expected to be the sequence length here, not a batch of sequences
-        seq_len = x.size(0)  # Assuming x is a 1D tensor representing positions
+        seq_len = x.size(0)
         t = torch.arange(seq_len, device=x.device).type_as(self.inv_freq)
         sinusoid_inp = torch.einsum("i , j -> i j", t, self.inv_freq)
         return torch.cat((sinusoid_inp.sin(), sinusoid_inp.cos()), dim=-1)
-
 
 def apply_rotary_pos_emb(x, sincos):
     sin, cos = sincos[..., :x.size(-1) // 2], sincos[..., x.size(-1) // 2:]
@@ -37,7 +35,7 @@ class PhiAttention(nn.Module):
 
         self.qkv = nn.Linear(embed_size, embed_size * 3)
         self.fc_out = nn.Linear(embed_size, embed_size)
-        self.scale = torch.sqrt(torch.FloatTensor([self.head_dim]))
+        self.scale = torch.sqrt(torch.FloatTensor([self.head_dim])).to("cuda" if torch.cuda.is_available() else "cpu")
         
     def forward(self, x, mask=None):
         N, seq_length, _ = x.shape
@@ -46,7 +44,6 @@ class PhiAttention(nn.Module):
         qkv = qkv.permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        # Scaled Dot-Product Attention with mask (optional)
         attn = torch.matmul(q, k.permute(0, 1, 3, 2)) / self.scale
         if mask is not None:
             attn = attn.masked_fill(mask == 0, float("-1e20"))
@@ -85,68 +82,5 @@ class PhiModel(nn.Module):
     def __init__(self, vocab_size, embed_size, num_layers, ffn_hidden, num_heads):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, embed_size)
-        # Initialize PhiRotaryEmbedding with embed_size
         self.pos_embedding = PhiRotaryEmbedding(embed_size)
-        self.layers = nn.ModuleList([PhiDecoderLayer(embed_size, ffn_hidden, num_heads) for _ in range(num_layers)])
-        self.norm = nn.LayerNorm(embed_size)
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, x, mask=None):
-        N, seq_length = x.shape
-        # Ensure positions tensor is correctly shaped and used
-        positions = self.pos_embedding(torch.arange(seq_length, device=x.device)).unsqueeze(0).repeat(N, 1, 1)
-        x = self.dropout(self.token_embedding(x) + positions)
-
-        for layer in self.layers:
-            x = layer(x)
-
-        return self.norm(x)
-
-
-class PhiForCausalLM(nn.Module):
-    def __init__(self, vocab_size, embed_size, num_layers, ffn_hidden, num_heads):
-        super(PhiForCausalLM, self).__init__()
-        self.phi_model = PhiModel(vocab_size, embed_size, num_layers, ffn_hidden, num_heads)
-        self.lm_head = nn.Linear(embed_size, vocab_size)
-
-    def forward(self, x, labels=None):
-        x = self.phi_model(x)
-        logits = self.lm_head(x)
-
-        loss = None
-        if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
-        
-        return logits, loss
-
-def generate_synthetic_data(num_samples=10000, sequence_length=50, vocab_size=51200):
-    input_ids = torch.randint(0, vocab_size, (num_samples, sequence_length))
-    labels = input_ids.clone()
-    return input_ids, labels
-
-
-# Now we instantiate and prepare the model for training as before.
-vocab_size = 51200
-embed_size = 2560
-num_layers = 32
-ffn_hidden = 10240
-num_heads = 8
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = PhiForCausalLM(vocab_size, embed_size, num_layers, ffn_hidden, num_heads).to(device)
-
-optimizer = AdamW(model.parameters(), lr=5e-5)
-input_ids, labels = generate_synthetic_data()
-dataset = TensorDataset(input_ids, labels)
-loader = DataLoader(dataset, batch_size=16, shuffle=True)
-
-model.train()
-for epoch in range(1):  # This is just a placeholder. For actual training, consider using more epochs.
-    for batch in loader:
-        inputs, labels = [item.to(device) for item in batch]
-        optimizer.zero_grad()
-        _, loss = model(inputs, labels=labels)
-        loss.backward()
-        optimizer.step()
-        print(f"Epoch {epoch}, Loss: {loss.item()}")
+        self.layers = nn.ModuleList([PhiDecoderLayer(embed_size, ffn_hidden, num_heads
