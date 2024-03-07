@@ -145,19 +145,25 @@ for epoch in range(1):  # Placeholder loop for demonstration
         optimizer.step()
         print(f"Epoch {epoch}, Loss: {loss.item()}")
 
+# Save the model's state dict
+torch.save(model.state_dict(), "phi_for_causal_lm_state_dict.pt")
 
-#Saving to hugginface 
-model.save_pretrained("finetuned_MedQuad1")
-#Saving the Model on huggingface
-token = "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"
-model.push_to_hub("Amirkid/phi-arc", use_auth_token=token)
+from huggingface_hub import HfApi, HfFolder
 
+# Login and get your token
+HfFolder.save_token("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")  # Replace with your actual token
 
-'''
-Traceback (most recent call last):
-  File "/home/pod/phi-architecture/model_file.py", line 150, in <module>
-    model.save_pretrained("finetuned_MedQuad1")
-  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1695, in __getattr__
-    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-AttributeError: 'PhiForCausalLM' object has no attribute 'save_pretrained
-'''
+# Initialize API
+api = HfApi()
+
+# Create a repository on the Hugging Face Hub (skip if already created)
+# Replace 'your_model_name' with the actual model name and 'your_hugging_face_username' with your username
+api.create_repo(token="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", name="phi-arc", organization="Amirkid", repo_type="model")
+
+# Upload the model
+api.upload_file(
+    token="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",
+    repo_id="Amirkid/phi-arc",  # Your Hugging Face username and model name
+    path_or_fileobj="phi_for_causal_lm_state_dict.pt",  # Path to the model file
+    path_in_repo="phi_for_causal_lm_state_dict.pt",  # Path in the repository (can be the same as the filename)
+)
