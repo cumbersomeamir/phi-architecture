@@ -151,3 +151,13 @@ model.save_pretrained("finetuned_MedQuad1")
 #Saving the Model on huggingface
 token = "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"
 model.push_to_hub("Amirkid/phi-arc", use_auth_token=token)
+
+
+'''
+Traceback (most recent call last):
+  File "/home/pod/phi-architecture/model_file.py", line 150, in <module>
+    model.save_pretrained("finetuned_MedQuad1")
+  File "/usr/local/lib/python3.10/dist-packages/torch/nn/modules/module.py", line 1695, in __getattr__
+    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+AttributeError: 'PhiForCausalLM' object has no attribute 'save_pretrained
+'''
