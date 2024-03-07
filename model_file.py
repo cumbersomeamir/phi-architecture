@@ -136,7 +136,7 @@ dataset = TensorDataset(input_ids, labels)
 loader = DataLoader(dataset, batch_size=16, shuffle=True)
 
 model.train()
-for epoch in range(1):  # Placeholder loop for demonstration
+for epoch in range(0.1):  # Placeholder loop for demonstration
     for batch in loader:
         inputs, labels = batch
         optimizer.zero_grad()
@@ -144,3 +144,10 @@ for epoch in range(1):  # Placeholder loop for demonstration
         loss.backward()
         optimizer.step()
         print(f"Epoch {epoch}, Loss: {loss.item()}")
+
+
+#Saving to hugginface 
+model.save_pretrained("finetuned_MedQuad1")
+#Saving the Model on huggingface
+token = "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"
+model.push_to_hub("Amirkid/phi-arc", use_auth_token=token)
