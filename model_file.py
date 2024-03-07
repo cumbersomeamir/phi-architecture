@@ -136,7 +136,7 @@ dataset = TensorDataset(input_ids, labels)
 loader = DataLoader(dataset, batch_size=16, shuffle=True)
 
 model.train()
-for epoch in range(0.1):  # Placeholder loop for demonstration
+for epoch in range(1):  # Placeholder loop for demonstration
     for batch in loader:
         inputs, labels = batch
         optimizer.zero_grad()
